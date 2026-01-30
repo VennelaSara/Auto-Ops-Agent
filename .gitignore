@@ -1,0 +1,78 @@
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.pyd
+*.pdb
+
+# Virtual environments
+venv/
+.venv/
+
+# Distribution / packaging
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+sdist/
+develop-eggs/
+.installed.cfg
+*.egg-info/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.pytest_cache/*
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Docker
+*.log
+docker-compose.override.yml
+*.env
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Specific folders in your project
+action_service/__pycache__/
+anomaly_service/__pycache__/
+decision_service/__pycache__/
+feedback_service/__pycache__/
+monitoring_service/__pycache__/
+storage_service/__pycache__/
+grafana_dashboards/*.json
+
+# Prometheus / Monitoring
+monitoring_service/prometheus/data/
+monitoring_service/prometheus/*.db

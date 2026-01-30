@@ -1,0 +1,182 @@
+version: "3.9"
+
+services:
+
+  # -----------------------------
+  # Redis (shared state)
+  # -----------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: aiops-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # -----------------------------
+  # Prometheus
+  # -----------------------------
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: aiops-prometheus
+    volumes:
+      - ./monitoring_service/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # -----------------------------
+  # Grafana Dashboard
+  # -----------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aiops-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+    restart: unless-stopped
+
+  # -----------------------------
+  # Step 1: Monitoring Service
+  # -----------------------------
+  monitoring-service:
+    build: ./monitoring_service
+    container_name: monitoring-service
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - prometheus
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PROMETHEUS_URL: http://prometheus:9090
+      ANOMALY_SERVICE_URL: http://anomaly-service:8001
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+    restart: unless-stopped
+
+  # -----------------------------
+  # Step 2: Anomaly Detection
+  # -----------------------------
+  anomaly-service:
+    build: ./anomaly_service
+    container_name: anomaly-service
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+      - monitoring-service
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PROMETHEUS_URL: http://prometheus:9090
+      DECISION_SERVICE_URL: http://decision-service:8002
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8001
+      --reload
+    restart: unless-stopped
+
+  # -----------------------------
+  # Step 3: Decision Service (LLM)
+  # -----------------------------
+  decision-service:
+    build: ./decision_service
+    container_name: decision-service
+    ports:
+      - "8002:8002"
+    depends_on:
+      - anomaly-service
+    environment:
+      ACTION_SERVICE_URL: http://action-service:8003/act
+      OLLAMA_URL: http://host.docker.internal:11434
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8002
+      --reload
+    restart: unless-stopped
+
+  # -----------------------------
+  # Step 4: Action Service
+  # -----------------------------
+  action-service:
+    build: ./action_service
+    container_name: action-service
+    ports:
+      - "8003:8003"
+    depends_on:
+      - decision-service
+    environment:
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
+      FEEDBACK_SERVICE_URL: http://feedback-service:8004
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8003
+      --reload
+    restart: unless-stopped
+
+  # -----------------------------
+  # Step 5: Feedback Service
+  # -----------------------------
+  feedback-service:
+    build: ./feedback_service
+    container_name: feedback-service
+    ports:
+      - "8004:8004"
+    depends_on:
+      - action-service
+      - redis
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      STORAGE_SERVICE_URL: http://storage-service:8005
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8004
+      --reload
+    restart: unless-stopped
+
+  # -----------------------------
+  # Step 6: Storage Service
+  # -----------------------------
+  storage-service:
+    build: ./storage_service
+    container_name: storage-service
+    ports:
+      - "8005:8005"
+    depends_on:
+      - redis
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8005
+      --reload
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  grafana_data:
